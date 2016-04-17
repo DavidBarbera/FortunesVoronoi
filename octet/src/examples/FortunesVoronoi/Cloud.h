@@ -10,4 +10,5 @@
 namespace cloud {
 
 	typedef std::list<Point *> Sites;
+	
 }

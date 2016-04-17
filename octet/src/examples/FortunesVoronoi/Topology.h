@@ -11,9 +11,13 @@
 
 
 class Topology {
+	typedef std::list<Vertex *>		Vertices;
+	typedef std::list<Face *>		Faces;
+	typedef std::list<HalfEdge *>	HalfEdges;
+
 public:
-	std::list<Vertex*>	 vertexRecords;
-	std::list<Face*>	 faceRecords;
-	std::list<HalfEdge*> halfEdgeRecords;
+	Vertices*	 vertexRecords;
+	Faces*		 faceRecords;
+	HalfEdges*	 halfEdgeRecords;
 
 };

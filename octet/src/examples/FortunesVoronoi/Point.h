@@ -1,5 +1,4 @@
-#ifndef Point_h
-#define Point_h
+#pragma once
 
 struct Point
 {
@@ -12,4 +11,4 @@ public:
 	}
 };
 
-#endif
+

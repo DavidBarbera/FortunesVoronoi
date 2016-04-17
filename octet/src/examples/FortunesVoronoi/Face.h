@@ -1,5 +1,4 @@
-#ifndef Face_h
-#define Face_h
+#pragma once
 
 #include "Point.h"
 #include "HalfEdge.h"
@@ -9,5 +8,3 @@ public:
 	Point* site;
 	HalfEdge* incidentHalfEdge;
 };
-
-#endif
