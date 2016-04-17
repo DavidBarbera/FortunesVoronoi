@@ -9,10 +9,15 @@
 
 enum {left,right};
 
+struct BreakPoint {
+	Point * leftSite;
+	Point * rightSite;
+};
+
 class BeachLineNode {
 public:
 	// if the Node is internal (breakpoint), store 2 halfEdges. If it is schedule to disappear, a pointer to the circle event.
-	std::tuple<Point*, Point*> breakpoint;
+	std::tuple<Point*, Point*> breakpoint; // stores sites coordinates <left site,right site> better make an struct out of this
 	HalfEdge* halfEdge1;
 	HalfEdge* halfEdge2;
 	Event* circleEvent;
@@ -27,6 +32,24 @@ public:
 	BeachLineNode* right;
 
 	//Rebalancing operations are needed
+
+
+	//constructor for a breakpoint
+	BeachLineNode()
+	{
+		isLeaf = false;
+	}
+
+	//constructor for a leaf
+	BeachLineNode(Point* p)
+	{
+		isLeaf = true;
+		site = p;
+	}
+
+
+
+
 	
 	
 };
