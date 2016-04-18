@@ -45,7 +45,6 @@ private:
 		topology.halfEdgeRecords = 0;
 		root = 0;
 	}
-	void HandleCircleEvent(BeachLineNode* leaf);
 
 	void VoronoiDiagram(::cloud::Sites * cloudPoints)
 	{
@@ -103,8 +102,104 @@ private:
 
 	void HandleCircleEvent(BeachLineNode* leaf)
 	{
+		if (falseAlarmEvents.find(leaf->circleEvent) != falseAlarmEvents.end()) {// means this circle event is among the false alarm ones.
+			delete(leaf->circleEvent);										
+			falseAlarmEvents.erase(leaf->circleEvent);
+			leaf->circleEvent = 0;
+			return;
+		}
+
+		BeachLineNode* leftBreakPoint = leaf->GetLeftParent(leaf);
+		BeachLineNode* rightBreakPoint = leaf->GetRightParent(leaf);
+		
+		BeachLineNode* leftLeaf = leftBreakPoint->GetLeftChild(leftBreakPoint);
+		BeachLineNode* rightLeaf = rightBreakPoint->GetLeftChild(rightBreakPoint);
+
+		BeachLineNode* highestBreakPoint;
+		BeachLineNode* node = leaf;
+
+		Point* vertexPoint = leaf->circleEvent->circleCentre; // a voronoi vertex
+
+		//locate first our highest breakpoint which we will reuse for our new breakpoint.
+		while (node != root) // the top node could be our breakpoint. y not (node->parent != 0)?
+		{
+			node = node->parent;
+			if (node == leftBreakPoint) highestBreakPoint = leftBreakPoint;
+			if (node == rightBreakPoint) highestBreakPoint = rightBreakPoint;
+		}
+
+		// use highest breakpoint for our new breakpoint when the arc disappears.
+		highestBreakPoint->breakpoint.leftSite = leftLeaf->site;
+		highestBreakPoint->breakpoint.rightSite = rightLeaf->site;
+		updateTopologyWithVertex(leftLeaf->site, rightLeaf->site,vertexPoint, leaf->site);
+
+
+
+		//relocating pointers in the tree
+		BeachLineNode* granParent = leaf->parent->parent;
+		if (leaf->parent->left == leaf) {
+			if (granParent->left == leaf->parent) granParent->left = leaf->parent->right;
+			if (granParent->right == leaf->parent) granParent->right = leaf->parent->right;
+		}
+		else {
+			if (granParent->left == leaf->parent) granParent->left = leaf->parent->left;
+			if (granParent->right == leaf->parent) granParent->right = leaf->parent->left;
+
+		}
+	
+		//delete the leaf and the breakpoint (lowest) no longer in use.
+		delete leaf->parent;
+		delete leaf;
+
+		//Check for circle events considering now, leftLeaf and rightLeaf
 
 	}//HandleCircleEvent()
+
+	void updateTopologyWithVertex(Site* s3, Site* s2, Point* voronoiVertex, Site* s1)
+	{
+		HalfEdge* e32 = new HalfEdge(s3, s2);
+		HalfEdge* e23 = new HalfEdge(s2, s3);
+		e32->twin = e23;
+		e23->twin = e32;
+
+		Vertex* vertex = new Vertex( voronoiVertex, e32);
+		topology.vertexRecords->push_back(vertex);
+		
+		HalfEdge* e12;
+		HalfEdge* e21;
+		HalfEdge* e13;
+		HalfEdge* e31;
+
+		//locate halfedges involved with the new voronoi vertex
+		for (HalfEdges::iterator i = topology.halfEdgeRecords->begin(); i != topology.halfEdgeRecords->end(); ++i) {
+			if ((*i)->orientation.leftSite == s1 && (*i)->orientation.leftSite == s2) e12 = (*i);
+			if ((*i)->orientation.leftSite == s2 && (*i)->orientation.leftSite == s1) e21 = (*i);
+			if ((*i)->orientation.leftSite == s1 && (*i)->orientation.leftSite == s3) e13 = (*i);
+			if ((*i)->orientation.leftSite == s3 && (*i)->orientation.leftSite == s1) e31 = (*i);
+		}
+
+		// updating halfedge info due to the new vertex
+		e21->destination = e13->destination = e32->destination = voronoiVertex;
+		e12->origin = e31->origin = e23->origin = voronoiVertex;
+
+		e32->next = e31;
+		e13->next = e12;
+		e21->next = e23;
+
+		e12->previous = e13;
+		e31->previous = e32;
+		e23->previous = e21;
+
+		Face* face3 = new Face(s3, e32);
+		topology.faceRecords->push_back(face3);
+		e32->face = face3;
+		e23->face = e21->face;
+
+		topology.halfEdgeRecords->push_back(e32);
+		topology.halfEdgeRecords->push_back(e23);
+
+
+	}
 
 	void HandleSiteEvent(Site* p)
 	{
@@ -121,15 +216,12 @@ private:
 			arcAbove->circleEvent = 0;
 		}
 
-		//inserting subtree...  and Handling halfedges, topology records....
+		//inserting subtree...  and Handling halfedges, topology records (DCEL)....
 		BeachLineNode* newArc = insertSubTree(arcAbove,p);
 
 		//check for circle events.
 
 		CheckForCircleEvents(newArc);
-
-
-
 
 	}//HandleSiteEvent
 
@@ -163,8 +255,6 @@ private:
 		Point* lowestTangent = new Point(point->x, point->y - radius);
 
 		insertCircleEvent(point, lowestTangent, mid);
-		
-
 
 	}
 
@@ -190,15 +280,15 @@ private:
 		
 		Point* lowestTangent = new Point(point->x, point->y - radius);
 
-		insertCircleEvent( point, lowestTangent, mid );
-
+		insertCircleEvent( point, lowestTangent, mid ); //  mid arc will disappear
 		
 	}
 
-	void insertCircleEvent(Point* centreCircle, Point* lowestTangent,BeachLineNode* Arc)
-	{
-		Event* circleEvent = new Event( lowestTangent, centreCircle,Arc );
-		Queue.push(circleEvent);
+	void insertCircleEvent(Point* centreCircle, Point* lowestTangent,BeachLineNode* Arc)// insert circle event in Queue, making sure
+	{																					// disappearing arc points to the circle event.
+		Event* event = new Event( lowestTangent, centreCircle,Arc );
+		Arc->circleEvent = event;
+		Queue.push(event);
 	}
 
 	double distance(Point* p1, Point* p2)
@@ -289,11 +379,21 @@ private:
 	    // Update DCEL, with new halfedges.//!!! put it in a new function (updateTopology-like)
 
 		//Creating the information:
-		HalfEdge* halfedge21 = new HalfEdge(newSite, arc1->site);
-		Face* face2 = new Face(newSite, halfedge21);
+		updateTopology(newSite, arc1->site);
+		
 
-		HalfEdge* halfedge12 = new HalfEdge(arc1->site, newSite);
-		Face* face1 = new Face(arc1->site, halfedge12);
+
+		return newArc2; // so we can check for circle events right and left of this new arc we just added to the beachline.
+
+	}
+
+	void updateTopology(Site* s2, Site* s1)
+	{
+		HalfEdge* halfedge21 = new HalfEdge( s2, s1 );
+		Face* face2 = new Face(s2, halfedge21);
+
+		HalfEdge* halfedge12 = new HalfEdge(s1, s2);
+		Face* face1 = new Face(s1, halfedge12);
 
 		halfedge21->twin = halfedge12;
 		halfedge12->twin = halfedge21;
@@ -307,10 +407,6 @@ private:
 
 		topology.faceRecords->push_back(face1);
 		topology.faceRecords->push_back(face2);
-
-
-		return newArc2; // so we can check for circle events right and left of this new arc we just added to the beachline.
-
 	}
 
 	BeachLineNode* ArcVerticallyAbove(Point* p)

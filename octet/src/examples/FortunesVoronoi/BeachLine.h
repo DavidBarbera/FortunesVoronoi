@@ -62,12 +62,12 @@ public:
 
 	// Some useful functions.
 
-	BeachLineNode* GetLeftLeaf() // gets closes left leaf of 'this'-node (x-wise). 'this' is always a leaf.
+	BeachLineNode* GetLeftLeaf() // gets closest left leaf of 'this'-node (x-wise). 'this' is always a leaf.
 	{							
 		return GetLeftChild(GetLeftParent(this));
 	}
 
-	BeachLineNode* GetRightLeaf() // gets closes right leaf of 'this'-node (x - wise). 'this' is always a leaf.
+	BeachLineNode* GetRightLeaf() // gets closest right leaf of 'this'-node (x - wise). 'this' is always a leaf.
 	{
 		return GetRightChild(GetRightParent(this));
 	}
