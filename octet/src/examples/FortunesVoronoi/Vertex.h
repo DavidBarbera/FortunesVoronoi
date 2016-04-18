@@ -1,5 +1,4 @@
-#ifndef Vertex_h
-#define Vertex_h
+#pragma once
 
 #include "Point.h"
 #include "HalfEdge.h"
@@ -9,4 +8,3 @@ class Vertex {
 	HalfEdge* incidentHalfEdge;
 };
 
-#endif

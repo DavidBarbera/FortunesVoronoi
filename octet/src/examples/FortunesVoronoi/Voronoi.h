@@ -147,7 +147,22 @@ private:
 		BeachLineNode* right = mid->GetRightLeaf();
 
 		if (!right || !mid) return; // no three consecutive arcs, so no chance of a circle.
-		
+		if ((right->site->x == left->site->x) && (right->site->y == left->site->y)) return; // no intersection in this case. this is case m1=m2
+
+		Point * point = BisectorIntersection(left->site, mid->site, right->site);
+
+		if (point == 0) return;
+		//Calculate radius
+
+		double radius = distance(point, leaf->site);
+
+		if (SweepLine_y <= (point->y - radius))  return;// the tangent is not below the sweep line
+														// delete point?
+														//!!! we need to check for a degenerate case in here: new site = lowest tangent point.
+
+		Point* lowestTangent = new Point(point->x, point->y - radius);
+
+		insertCircleEvent(point, lowestTangent, mid);
 		
 
 
@@ -161,6 +176,37 @@ private:
 
 		if (!left || !mid) return; // no three consecutive arcs, so no chance of a circle.
 		if ((right->site->x == left->site->x) && (right->site->y == left->site->y )) return; // no intersection in this case. this is case m1=m2
+		
+		Point * point = BisectorIntersection(left->site, mid->site, right->site);
+
+		if (point == 0) return;
+		//Calculate radius
+
+		double radius = distance(point, leaf->site);
+
+		if (SweepLine_y <= (point->y - radius))  return;// the tangent is not below the sweep line
+		// delete point?
+		//!!! we need to check for a degenerate case in here: new site = lowest tangent point.
+		
+		Point* lowestTangent = new Point(point->x, point->y - radius);
+
+		insertCircleEvent( point, lowestTangent, mid );
+
+		
+	}
+
+	void insertCircleEvent(Point* centreCircle, Point* lowestTangent,BeachLineNode* Arc)
+	{
+		Event* circleEvent = new Event( lowestTangent, centreCircle,Arc );
+		Queue.push(circleEvent);
+	}
+
+	double distance(Point* p1, Point* p2)
+	{
+		double dx = p1->x - p2->x;
+		double dy = p2->y - p2->y;
+
+		return sqrt(dx*dx + dy*dy);
 	}
 
 	Point* BisectorIntersection(Point* a, Point* b, Point* c)
