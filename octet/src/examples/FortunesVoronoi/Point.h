@@ -11,4 +11,8 @@ public:
 	}
 };
 
-
+struct BreakPoint {
+public:
+	Point * leftSite;
+	Point * rightSite;
+};

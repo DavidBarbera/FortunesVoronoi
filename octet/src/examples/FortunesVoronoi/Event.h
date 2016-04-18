@@ -9,7 +9,9 @@ class Event {
 public:
 	Point*		point;
 	bool		isCircleEvent;
-	BeachLineNode*	Arc; //if it is Site Event, Arc points to the parabola immediately above. if it is Circle Event Arc is the disappearing Arc/
+	BeachLineNode*	Arc; //if it is Site Event, Arc points to the parabola immediately above. 
+						 //if it is Circle Event Arc is the disappearing Arc.
+	
 	double		x;
 	double		y;
 
