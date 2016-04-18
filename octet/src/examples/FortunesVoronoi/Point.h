@@ -9,6 +9,8 @@ public:
 		x = xx;
 		y = yy;
 	}
+
+			
 };
 
 struct BreakPoint {

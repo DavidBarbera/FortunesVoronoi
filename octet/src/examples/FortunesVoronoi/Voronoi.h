@@ -135,8 +135,81 @@ private:
 
 	void CheckForCircleEvents(BeachLineNode* leaf)
 	{
-		BeachLineNode* left = leaf->GetLeftLeaf();
-		BeachLineNode* right;
+		CheckTripleLefty(leaf);
+		CheckTripleRighty(leaf);
+
+	}
+
+	void CheckTripleLefty(BeachLineNode* leaf) // check triple where leaf is at the left of the triple
+	{
+		BeachLineNode* left = leaf;
+		BeachLineNode* mid = leaf->GetRightLeaf();
+		BeachLineNode* right = mid->GetRightLeaf();
+
+		if (!right || !mid) return; // no three consecutive arcs, so no chance of a circle.
+		
+		
+
+
+	}
+
+	void CheckTripleRighty(BeachLineNode* leaf) // check triple where leaf is at the right of the triple
+	{
+		BeachLineNode* right = leaf;
+		BeachLineNode* mid = leaf->GetLeftLeaf();
+		BeachLineNode* left = mid->GetLeftLeaf();
+
+		if (!left || !mid) return; // no three consecutive arcs, so no chance of a circle.
+		if ((right->site->x == left->site->x) && (right->site->y == left->site->y )) return; // no intersection in this case. this is case m1=m2
+	}
+
+	Point* BisectorIntersection(Point* a, Point* b, Point* c)
+	{
+		double dx1 = b->x - a->x;
+		double dy1 = b->y - a->y;
+		double dx2 = c->x - b->x;
+		double dy2 = c->y - b->y;
+		double m1;
+		double m2;
+		double p1;
+		double p2;
+
+		if (b->y < a->y && b->y < c->y) return 0; // intersection is above, so no interest.
+
+		Point mid1((a->x+b->x)/2,(a->y+b->y)/2);		//midpoint between a and b
+		Point mid2((c->x + b->x) / 2, (c->y + b->y) / 2); //midpoint between b and c
+		Point* intersectionPoint= new Point(0, 0);
+
+		if (dx1 != 0 && dx2 != 0) {
+			
+			m1 = dy1 / dx1;
+			m2 = dy2 / dx2;
+
+			p1 = mid1.y - m1*mid1.x; // p1 belongs to r1 (bisector between a and b)
+			p2 = mid2.y - m2*mid2.x; // p2 belongs to r2 (bisector line between b and c)
+
+			intersectionPoint->x = (p2 - p1) / (m1 - m2);
+			intersectionPoint->y = m1*(intersectionPoint->x) + p1;
+
+			return intersectionPoint;
+		}
+
+		if (dx1 == 0 && dx2 == 0) return 0; //two vertical parallel lines: no intersections.
+
+		if (dx1 == 0) {
+			intersectionPoint->x = mid1.x;
+			m2 = dy2 / dx2;
+			p2 = mid2.y - m2*mid2.x;
+			intersectionPoint->y = m2*(intersectionPoint->x) + p2;
+		}
+
+		if (dx2 == 0) {
+			intersectionPoint->x = mid2.x;
+			m1 = dy1 / dx1;
+			p1 = mid1.y - m1*mid1.x;
+			intersectionPoint->y = m1*(intersectionPoint->x) + p1;
+		}
+		
 	}
 
 	BeachLineNode* insertSubTree(BeachLineNode* arc1, Site* newSite)//Arc is a leaf node.
