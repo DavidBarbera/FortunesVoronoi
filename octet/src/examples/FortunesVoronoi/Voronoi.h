@@ -121,17 +121,24 @@ private:
 			arcAbove->circleEvent = 0;
 		}
 
-		//inserting subtree...
-		insertSubTree(arcAbove,p);
+		//inserting subtree...  and Handling halfedges, topology records....
+		BeachLineNode* newArc = insertSubTree(arcAbove,p);
 
-		//Handling halfedges....
+		//check for circle events.
+
+		CheckForCircleEvents(newArc);
 
 
 
 
 	}//HandleSiteEvent
 
-	void insertSubTree(BeachLineNode* arc1, Site* newSite)//Arc is a leaf node.
+	void CheckForCircleEvents(BeachLineNode* leaf)
+	{
+
+	}
+
+	BeachLineNode* insertSubTree(BeachLineNode* arc1, Site* newSite)//Arc is a leaf node.
 	{													  //                     <2,1>
 														  //					/    \
 														  //				<1,2>    arc1
@@ -159,9 +166,30 @@ private:
 		newArc2->site = newSite;
 
 
+	    // Update DCEL, with new halfedges.//!!! put it in a new function (updateTopology-like)
+
+		//Creating the information:
+		HalfEdge* halfedge21 = new HalfEdge(newSite, arc1->site);
+		Face* face2 = new Face(newSite, halfedge21);
+
+		HalfEdge* halfedge12 = new HalfEdge(arc1->site, newSite);
+		Face* face1 = new Face(arc1->site, halfedge12);
+
+		halfedge21->twin = halfedge12;
+		halfedge12->twin = halfedge21;
+
+		halfedge21->face = face2;
+		halfedge12->face = face1;
+
+		//Inserting info into our records (DCEL)
+		topology.halfEdgeRecords->push_back(halfedge12);
+		topology.halfEdgeRecords->push_back(halfedge21);
+
+		topology.faceRecords->push_back(face1);
+		topology.faceRecords->push_back(face2);
 
 
-		
+		return newArc2; // so we can check for circle events right and left of this new arc we just added to the beachline.
 
 	}
 

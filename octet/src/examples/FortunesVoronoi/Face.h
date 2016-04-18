@@ -7,4 +7,11 @@ class Face {
 public:
 	Point* site;
 	HalfEdge* incidentHalfEdge;
+
+	//constructor
+	Face(Point* s, HalfEdge* he)
+	{
+		site = s;
+		incidentHalfEdge = he;
+	}
 };
