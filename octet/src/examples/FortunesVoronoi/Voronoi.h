@@ -135,7 +135,8 @@ private:
 
 	void CheckForCircleEvents(BeachLineNode* leaf)
 	{
-
+		BeachLineNode* left = leaf->GetLeftLeaf();
+		BeachLineNode* right;
 	}
 
 	BeachLineNode* insertSubTree(BeachLineNode* arc1, Site* newSite)//Arc is a leaf node.

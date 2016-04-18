@@ -60,9 +60,64 @@ public:
 
 	}
 
+	// Some useful functions.
 
+	BeachLineNode* GetLeftLeaf() // gets closes left leaf of 'this'-node (x-wise). 'this' is always a leaf.
+	{							
+		return GetLeftChild(GetLeftParent(this));
+	}
 
-
+	BeachLineNode* GetRightLeaf() // gets closes right leaf of 'this'-node (x - wise). 'this' is always a leaf.
+	{
+		return GetRightChild(GetRightParent(this));
+	}
 	
-	
+	BeachLineNode* GetLeftParent(BeachLineNode* n) // Returns closest left parent (breakpoint) (x-wise)
+	{														//Here n is always a leaf
+		BeachLineNode* parentNode = n->parent;
+		BeachLineNode* lastNode = n;
+
+		while (parentNode->left == lastNode)
+		{
+			if (!parentNode->parent) return 0; // Case parent is the root of the tree.
+			lastNode = parentNode;
+			parentNode = parentNode->parent;
+		}
+
+		return parentNode;
+	}
+
+	BeachLineNode* GetRightParent(BeachLineNode* n)// Returns closest right parent (breakpoint) (x-wise)
+	{														//Here n is always a leaf
+		BeachLineNode* parentNode = n->parent;
+		BeachLineNode* lastNode = n;
+
+		while (parentNode->right == lastNode)
+		{
+			if (!parentNode->parent) return 0; // Case parent is the root of the tree.
+			lastNode = parentNode;
+			parentNode = parentNode->parent;
+		}
+
+		return parentNode;
+	}
+
+	BeachLineNode* GetLeftChild(BeachLineNode* n) // Get closest left leaf (x-wise)
+	{											  // Here n is always an internal node (i.e. not a leaf).
+		if (!n) return 0;					  // if n is the root
+		BeachLineNode* child = n->left;
+		while (!child->isLeaf) child = child->right;
+			
+		return child;
+	}
+
+	BeachLineNode* GetRightChild(BeachLineNode* n) // Get closest right leaf (x-wise)
+	{											  // Here n is always an internal node (i.e. not a leaf).
+		if (!n) return 0;					  // if n is the root
+		BeachLineNode* child = n->right;
+		while (!child->isLeaf) child = child->left;
+
+		return child;
+	}
+
 };
