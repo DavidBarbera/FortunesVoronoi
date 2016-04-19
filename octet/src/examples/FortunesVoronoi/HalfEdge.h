@@ -20,6 +20,12 @@ public:
 	{
 		orientation.leftSite = site1;
 		orientation.rightSite = site2;
+		origin = 0;
+		destination = 0;
+		twin = 0;
+		face = 0;
+		next = 0;
+		previous = 0;
 
 	}
 

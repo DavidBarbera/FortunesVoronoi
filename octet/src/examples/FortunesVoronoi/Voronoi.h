@@ -8,6 +8,7 @@
 #include "Topology.h"
 #include "Event.h"
 #include "Cloud.h"
+#include "FortunesVoronoi.h"
 
 #include <list>
 #include <queue>
@@ -23,6 +24,9 @@ class Voronoi {
 	typedef std::list<Vertex *>		Vertices;
 	typedef std::list<Face *>		Faces;
 	typedef std::list<HalfEdge *>	HalfEdges;
+
+public:
+	
 
 private:
 	Topology topology;  // The  DCEL.
@@ -97,8 +101,117 @@ private:
 				HandleSiteEvent(currentEvent->point);
 			}
 
+		//Bounding box, (for the infinite edges)
+		//1. complete vertex info for each halfedge record  2. fill
+			ApplyBoundingBox();
+
 		}//Main loop of the Algorithm
 	}//VoronoiDiagram()
+
+	void ApplyBoundingBox()
+	{
+		for (HalfEdges::iterator i = topology.halfEdgeRecords->begin(); i != topology.halfEdgeRecords->end(); ++i) {
+			if ((*i)->destination == 0 || (*i)->origin == 0) {
+				if ((*i)->destination == 0) {
+					(*i)->destination = calculateBBoxIntersection((*i)->origin, (*i)->orientation );
+					(*i)->twin->origin = (*i)->destination;
+				}
+				else {
+					(*i)->origin = calculateBBoxIntersection((*i)->destination, (*i)->orientation);
+					(*i)->twin->destination = (*i)->origin;
+				}
+			}
+		}
+	}
+
+	Point* calculateBBoxIntersection(Point* v, Orientation orientation)
+	{
+		Site* s1 = orientation.leftSite;
+		Site* s2 = orientation.rightSite;
+		Point* V = new Point(0, 0);
+
+		//1. Determining quadrant:
+		Point m((s1->x+s2->x)/2,(s1->y+s2->y)/2);
+		Point u(m.x - v->x, m.y - v->y);
+
+		if (u.x > 0 && u.y > 0) {
+			if (u.x == 0 || u.y == 0) {
+				if (u.x == 0) { V->x = v->x; V->y = FACTOR; }
+				if (u.y == 0) { V->x = FACTOR; V->y = v->y; }
+			}
+			else {
+				Point d(FACTOR - v->x, FACTOR - v->y); // d: vector from v to (FACTOR,FACTOR), top right corner.
+				double slopeD = d.y / d.x; //d.x would be zero only if one of the sites is out of the bbox, which we constructed including all sites.
+				double slopeU = u.y / u.x;
+				if (slopeD == slopeU) { V->x = FACTOR; V->y = FACTOR; }
+				if (slopeD > slopeU) { //hits right side of the box
+					V->x = FACTOR; V->y = slopeU*(V->x) + m.y - slopeU*m.x;
+				}
+				else { //hits top of the box
+					V->y = FACTOR; V->x = (V->y - m.y + slopeU*m.x) / slopeU;
+				}
+			}
+		}
+		if (u.x < 0 && u.y>0) {
+			if (u.x == 0 || u.y == 0) {
+				if (u.x == 0) { V->x = v->x; V->y = FACTOR; }
+				if (u.y == 0) { V->x = 0; V->y = v->y; }
+			}
+			else {
+				Point d(0 - v->x, FACTOR - v->y); // d: vector from v to (0,FACTOR), top left corner.
+				double slopeD = d.y / d.x; //d.x would be zero only if one of the sites is out of the bbox, which we constructed including all sites.
+				double slopeU = u.y / u.x;
+				if (slopeD == slopeU) { V->x = 0; V->y = FACTOR; }
+				if (slopeD > slopeU) { //hits top of the box
+					V->y = FACTOR; V->x = (V->y - m.y + slopeU*m.x) / slopeU;
+				}
+				else { //hits left of the box
+					V->x = 0; V->y = slopeU*(V->x) + m.y - slopeU*m.x;
+				}
+			}
+
+		}
+		if (u.x < 0 && u.y < 0) {
+			if (u.x == 0 || u.y == 0) {
+				if (u.x == 0) { V->x = v->x; V->y = 0; }
+				if (u.y == 0) { V->x = 0; V->y = v->y; }
+			}
+			else {
+				Point d(0 - v->x, 0 - v->y); // d: vector from v to (0,0), bottom left corner.
+				double slopeD = d.y / d.x; //d.x would be zero only if one of the sites is out of the bbox, which we constructed including all sites.
+				double slopeU = u.y / u.x;
+				if (slopeD == slopeU) { V->x = 0; V->y = 0; }
+				if (slopeD > slopeU) { //hits left of the box
+
+					V->x = 0; V->y = slopeU*(V->x) + m.y - slopeU*m.x;
+				}
+				else { //hits bottom of the box
+					V->y = 0; V->x = (V->y - m.y + slopeU*m.x) / slopeU;
+				}
+			}
+		}
+			if (u.x > 0 && u.y < 0) {
+				if (u.x == 0 || u.y == 0) {
+					if (u.x == 0) { V->x = v->x; V->y = 0; }
+					if (u.y == 0) { V->x = FACTOR; V->y = v->y; }
+				}
+				else {
+					Point d(FACTOR - v->x, 0 - v->y); // d: vector from v to (FACTOR,0), bottom right corner.
+					double slopeD = d.y / d.x; //d.x would be zero only if one of the sites is out of the bbox, which we constructed including all sites.
+					double slopeU = u.y / u.x;
+					if (slopeD == slopeU) { V->x = FACTOR; V->y = 0; }
+					if (slopeD > slopeU) { //hits right of the box
+
+						V->x = FACTOR; V->y = slopeU*(V->x) + m.y - slopeU*m.x;
+					}
+					else { //hits bottom of the box
+						V->y = 0; V->x = (V->y - m.y + slopeU*m.x) / slopeU;
+					}
+				}
+			}
+
+			return V;
+	}
 
 	void HandleCircleEvent(BeachLineNode* leaf)
 	{
@@ -152,6 +265,8 @@ private:
 		delete leaf;
 
 		//Check for circle events considering now, leftLeaf and rightLeaf
+		CheckTripleMid(leftLeaf);
+		CheckTripleMid(rightLeaf);
 
 	}//HandleCircleEvent()
 
@@ -282,6 +397,32 @@ private:
 
 		insertCircleEvent( point, lowestTangent, mid ); //  mid arc will disappear
 		
+	}
+
+	void CheckTripleMid(BeachLineNode* leaf) // check triple where leaf is at the left of the triple
+	{
+		BeachLineNode* left = leaf->GetLeftLeaf();
+		BeachLineNode* mid;
+		BeachLineNode* right = leaf->GetRightLeaf();
+
+		if (!right || !mid) return; // no three consecutive arcs, so no chance of a circle.
+		if ((right->site->x == left->site->x) && (right->site->y == left->site->y)) return; // no intersection in this case. this is case m1=m2
+
+		Point * point = BisectorIntersection(left->site, mid->site, right->site);
+
+		if (point == 0) return;
+		//Calculate radius
+
+		double radius = distance(point, leaf->site);
+
+		if (SweepLine_y <= (point->y - radius))  return;// the tangent is not below the sweep line
+														// delete point?
+														//!!! we need to check for a degenerate case in here: new site = lowest tangent point.
+
+		Point* lowestTangent = new Point(point->x, point->y - radius);
+
+		insertCircleEvent(point, lowestTangent, mid);
+
 	}
 
 	void insertCircleEvent(Point* centreCircle, Point* lowestTangent,BeachLineNode* Arc)// insert circle event in Queue, making sure
