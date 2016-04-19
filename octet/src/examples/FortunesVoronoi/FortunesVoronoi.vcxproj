@@ -215,7 +215,7 @@
     <ClInclude Include="..\..\shaders\shader.h" />
     <ClInclude Include="..\..\shaders\shaders.h" />
     <ClInclude Include="..\..\shaders\texture_shader.h" />
-    <ClInclude Include="BeachLine.h" />
+    <ClInclude Include="BeachLineNode.h" />
     <ClInclude Include="Cloud.h" />
     <ClInclude Include="Event.h" />
     <ClInclude Include="Face.h" />

@@ -427,7 +427,6 @@
     <ClInclude Include="..\..\containers\string.h">
       <Filter>containers</Filter>
     </ClInclude>
-    <ClInclude Include="FortunesVoronoi.h" />
     <ClInclude Include="Point.h">
       <Filter>Source Files</Filter>
     </ClInclude>
@@ -446,13 +445,16 @@
     <ClInclude Include="Topology.h">
       <Filter>Source Files</Filter>
     </ClInclude>
-    <ClInclude Include="BeachLine.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
     <ClInclude Include="Event.h">
       <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="Voronoi.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="FortunesVoronoi.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="BeachLineNode.h">
       <Filter>Source Files</Filter>
     </ClInclude>
   </ItemGroup>

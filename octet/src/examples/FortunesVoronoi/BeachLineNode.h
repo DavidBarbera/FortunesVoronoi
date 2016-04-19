@@ -6,8 +6,7 @@
 //#include <tuple>
 #include "Point.h"
 #include "HalfEdge.h"
-
-enum {left,right};
+#include "Event.h"
 
 
 

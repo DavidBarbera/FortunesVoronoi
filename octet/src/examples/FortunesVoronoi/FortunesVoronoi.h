@@ -9,6 +9,7 @@
 
 #include "Point.h"
 #include "Cloud.h"
+#include "Voronoi.h"
 
 #include <iostream>
 #include <math.h>
@@ -29,10 +30,7 @@ namespace octet {
 
 	cloud::Sites * sites;
 
-	
-
-
-
+//	Voronoi voronoi;
 
   public:
     /// this is called when we construct the class before everything is initialised.
@@ -58,7 +56,7 @@ namespace octet {
 	  sites->push_back(new Point((FACTOR - 2 * THICKNESS)*(double)0.7 + THICKNESS, (FACTOR - 2 * THICKNESS)*(double)0.4 + THICKNESS));
 	  sites->push_back(new Point((FACTOR - 2 * THICKNESS)*(double)0.3 + THICKNESS, (FACTOR - 2 * THICKNESS)*(double)0.2 + THICKNESS));
 
-	  
+	 // voronoi.VoronoiDiagram(sites);
 
 	  }
 
@@ -92,7 +90,7 @@ namespace octet {
 
 
 	  drawSomething();
-
+	 // voronoi.VoronoiDraw();
 
       // update matrices. assume 30 fps.
       app_scene->update(1.0f/30);
