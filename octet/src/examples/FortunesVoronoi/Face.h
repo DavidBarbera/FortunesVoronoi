@@ -1,7 +1,9 @@
 #pragma once
 
 #include "Point.h"
-#include "HalfEdge.h"
+//#include "HalfEdge.h"
+
+class HalfEdge;
 
 class Face {
 public:

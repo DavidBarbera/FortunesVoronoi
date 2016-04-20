@@ -1,9 +1,13 @@
 #pragma once
 
 #include "Point.h"
-#include "BeachLineNode.h"
+//#include "BeachLineNode.h"
+
+
 
 #include <iostream>
+
+class BeachLineNode;
 
 class Event {
 public:

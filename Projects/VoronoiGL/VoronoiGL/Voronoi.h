@@ -8,7 +8,7 @@
 #include "Topology.h"
 #include "Event.h"
 #include "Cloud.h"
-#include "FortunesVoronoi.h"
+//#include "FortunesVoronoi.h"
 
 #include <list>
 #include <queue>
@@ -16,16 +16,34 @@
 #include <functional>
 #include <tuple>
 #include <iostream>
+#include <vector>
 
-namespace octet {
-	class Voronoi : public resource {
-		typedef Point					Site;
-		typedef std::list<Point *>		Sites;
-		typedef std::list<Point *>		Diagram;
-		typedef std::list<Vertex *>		Vertices;
-		typedef std::list<Face *>		Faces;
-		typedef std::list<HalfEdge *>	HalfEdges;
+class BeachLineNode;
 
+#define FACTOR 100
+
+namespace vor
+{
+	/*
+	Useful data containers for Vertices (places) and Edges of Voronoi diagram
+	*/
+
+	typedef std::list<Point *>		Vertics;
+	typedef std::list<Point *>		Edges;
+
+	typedef Point					Site;
+	typedef std::list<Point *>		Sites;
+	typedef std::list<Point *>		Diagram;
+	typedef std::list<Vertex *>		Vertices;
+	typedef std::list<Face *>		Faces;
+	typedef std::list<HalfEdge *>	HalfEdges;
+
+	/*
+	Class for generating the Voronoi diagram
+	*/
+	class Voronoi {
+
+		typedef std::list<Point*> Edges;
 
 	public:
 		Topology topology;  // The  DCEL.
@@ -39,7 +57,7 @@ namespace octet {
 		Sites * sites;		// Where we store the points of the cloud.		
 		Diagram * diagram; //Where we will store the edges of the Voronoi Diagram. Reading as pairs of points each edge.
 
-		dynarray<vec2> edges;
+		Edges * edges;
 
 		//Constructor
 		Voronoi()
@@ -51,22 +69,8 @@ namespace octet {
 			root = 0;
 		}
 
-		void VoronoiDraw()
-		{
-			glClearColor(0, 0, 0, 1);
-			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-			//glLineWidth();
-			glBegin(GL_LINES);
 
-			for (unsigned int i = 0; i < edges.size(); i++) {
-				glColor3f(1.f, 0.f, 0.f);
-				glVertex2f(edges[i].x(),edges[i].y());
-			}
-
-			glEnd();
-		}
-
-		void VoronoiDiagram(::cloud::Sites * cloudPoints)
+		Diagram* VoronoiDiagram(Sites * cloudPoints)
 		{
 			//Initialization	
 			sites = cloudPoints;
@@ -98,6 +102,7 @@ namespace octet {
 			}
 
 
+
 			//Main loop of the Algorithm:
 			Event *currentEvent;
 			while (!Queue.empty()) {
@@ -116,21 +121,29 @@ namespace octet {
 				else {
 					HandleSiteEvent(currentEvent->point);
 				}
-
-				//Bounding box, (for the infinite edges)
-				//1. complete vertex info for each halfedge record  2. fill
-				ApplyBoundingBox();
-
-				prepareEdges();
+				delete (currentEvent); //Already processed, no longer needed.
 
 			}//Main loop of the Algorithm
+
+			 //Bounding box, (for the infinite edges)
+			 //1. complete vertex info for each halfedge record  2. fill
+			ApplyBoundingBox();
+
+			prepareEdges();
+			return diagram;
+
 		}//VoronoiDiagram()
 
 		void prepareEdges()
 		{
 			for (HalfEdges::iterator i = topology.halfEdgeRecords->begin(); i != topology.halfEdgeRecords->end(); ++i) {
-				edges.push_back(vec2((*i)->origin->x, (*i)->destination->y)); i++;
+				edges->push_back( (*i)->origin ); 
+				edges->push_back( (*i)->destination );
+				//i++;
 			}
+
+			for (Sites::iterator i = sites->begin(); i != sites->end(); ++i)
+				diagram->push_back((*i));
 		}
 
 		void ApplyBoundingBox()
@@ -251,9 +264,9 @@ namespace octet {
 			BeachLineNode* rightBreakPoint = leaf->GetRightParent(leaf);
 
 			BeachLineNode* leftLeaf = leftBreakPoint->GetLeftChild(leftBreakPoint);
-			BeachLineNode* rightLeaf = rightBreakPoint->GetLeftChild(rightBreakPoint);
+			BeachLineNode* rightLeaf = rightBreakPoint->GetRightChild(rightBreakPoint);
 
-			BeachLineNode* highestBreakPoint;
+			BeachLineNode* highestBreakPoint=0;
 			BeachLineNode* node = leaf;
 
 			Point* vertexPoint = leaf->circleEvent->circleCentre; // a voronoi vertex
@@ -275,13 +288,13 @@ namespace octet {
 
 			//relocating pointers in the tree
 			BeachLineNode* granParent = leaf->parent->parent;
-			if (leaf->parent->left == leaf) {
-				if (granParent->left == leaf->parent) granParent->left = leaf->parent->right;
-				if (granParent->right == leaf->parent) granParent->right = leaf->parent->right;
+			if (leaf->parent->Left() == leaf) {
+				if (granParent->Left() == leaf->parent) granParent->SetLeft( leaf->parent->Right() );
+				if (granParent->Right() == leaf->parent) granParent->SetRight( leaf->parent->Right() );
 			}
 			else {
-				if (granParent->left == leaf->parent) granParent->left = leaf->parent->left;
-				if (granParent->right == leaf->parent) granParent->right = leaf->parent->left;
+				if (granParent->Left() == leaf->parent) granParent->SetLeft( leaf->parent->Left() );
+				if (granParent->Right() == leaf->parent) granParent->SetRight( leaf->parent->Left() );
 
 			}
 
@@ -290,13 +303,14 @@ namespace octet {
 			delete leaf;
 
 			//Check for circle events considering now, leftLeaf and rightLeaf
-			CheckTripleMid(leftLeaf);
-			CheckTripleMid(rightLeaf);
+			CheckForCircleEvents(leftLeaf);
+			CheckForCircleEvents(rightLeaf);
 
 		}//HandleCircleEvent()
 
 		void updateTopologyWithVertex(Site* s3, Site* s2, Point* voronoiVertex, Site* s1)
 		{
+			bool face3isNew = true;
 			HalfEdge* e32 = new HalfEdge(s3, s2);
 			HalfEdge* e23 = new HalfEdge(s2, s3);
 			e32->twin = e23;
@@ -305,17 +319,17 @@ namespace octet {
 			Vertex* vertex = new Vertex(voronoiVertex, e32);
 			topology.vertexRecords->push_back(vertex);
 
-			HalfEdge* e12;
-			HalfEdge* e21;
-			HalfEdge* e13;
-			HalfEdge* e31;
+			HalfEdge* e12=0;
+			HalfEdge* e21=0;
+			HalfEdge* e13=0;
+			HalfEdge* e31=0;
 
 			//locate halfedges involved with the new voronoi vertex
 			for (HalfEdges::iterator i = topology.halfEdgeRecords->begin(); i != topology.halfEdgeRecords->end(); ++i) {
-				if ((*i)->orientation.leftSite == s1 && (*i)->orientation.leftSite == s2) e12 = (*i);
-				if ((*i)->orientation.leftSite == s2 && (*i)->orientation.leftSite == s1) e21 = (*i);
-				if ((*i)->orientation.leftSite == s1 && (*i)->orientation.leftSite == s3) e13 = (*i);
-				if ((*i)->orientation.leftSite == s3 && (*i)->orientation.leftSite == s1) e31 = (*i);
+				if ((*i)->orientation.leftSite == s1 && (*i)->orientation.rightSite == s2) e12 = (*i);
+				if ((*i)->orientation.leftSite == s2 && (*i)->orientation.rightSite == s1) e21 = (*i);
+				if ((*i)->orientation.leftSite == s1 && (*i)->orientation.rightSite == s3) e13 = (*i);
+				if ((*i)->orientation.leftSite == s3 && (*i)->orientation.rightSite == s1) e31 = (*i);
 			}
 
 			// updating halfedge info due to the new vertex
@@ -335,14 +349,19 @@ namespace octet {
 			e23->previous = e21;
 
 			Face* face3 = new Face(s3, e32);
-			topology.faceRecords->push_back(face3);
+
+			for (Faces::iterator i = topology.faceRecords->begin(); i != topology.faceRecords->end(); ++i) {
+				if ((*i)->site == face3->site) face3isNew = false;
+			}
+			if (face3isNew) {
+				topology.faceRecords->push_back(face3);
+			}
+
 			e32->face = face3;
 			e23->face = e21->face;
 
 			topology.halfEdgeRecords->push_back(e32);
 			topology.halfEdgeRecords->push_back(e23);
-
-
 		}
 
 		void HandleSiteEvent(Site* p)
@@ -365,111 +384,69 @@ namespace octet {
 
 			//check for circle events.
 
-			CheckForCircleEvents(newArc);
+			CheckForCircleEvents( newArc->GetLeftLeaf() );  //check triple where newArc is rightest
+			CheckForCircleEvents( newArc->GetRightLeaf() ); //check triple where newArc is leftiest
 
 		}//HandleSiteEvent
 
-		void CheckForCircleEvents(BeachLineNode* leaf)
-		{
-			CheckTripleLefty(leaf);
-			CheckTripleRighty(leaf);
-
-		}
-
-		void CheckTripleLefty(BeachLineNode* leaf) // check triple where leaf is at the left of the triple
-		{
-			BeachLineNode* left = leaf;
-			BeachLineNode* mid = leaf->GetRightLeaf();
-			BeachLineNode* right = mid->GetRightLeaf();
-
-			if (!right || !mid) return; // no three consecutive arcs, so no chance of a circle.
-			if ((right->site->x == left->site->x) && (right->site->y == left->site->y)) return; // no intersection in this case. this is case m1=m2
-
-			Point * point = BisectorIntersection(left->site, mid->site, right->site);
-
-			if (point == 0) return;
-			//Calculate radius
-
-			double radius = distance(point, leaf->site);
-
-			if (SweepLine_y <= (point->y - radius))  return;// the tangent is not below the sweep line
-															// delete point?
-															//!!! we need to check for a degenerate case in here: new site = lowest tangent point.
-
-			Point* lowestTangent = new Point(point->x, point->y - radius);
-
-			insertCircleEvent(point, lowestTangent, mid);
-
-		}
-
-		void CheckTripleRighty(BeachLineNode* leaf) // check triple where leaf is at the right of the triple
-		{
-			BeachLineNode* right = leaf;
-			BeachLineNode* mid = leaf->GetLeftLeaf();
-			BeachLineNode* left = mid->GetLeftLeaf();
-
-			if (!left || !mid) return; // no three consecutive arcs, so no chance of a circle.
-			if ((right->site->x == left->site->x) && (right->site->y == left->site->y)) return; // no intersection in this case. this is case m1=m2
-
-			Point * point = BisectorIntersection(left->site, mid->site, right->site);
-
-			if (point == 0) return;
-			//Calculate radius
-
-			double radius = distance(point, leaf->site);
-
-			if (SweepLine_y <= (point->y - radius))  return;// the tangent is not below the sweep line
-			// delete point?
-			//!!! we need to check for a degenerate case in here: new site = lowest tangent point.
-
-			Point* lowestTangent = new Point(point->x, point->y - radius);
-
-			insertCircleEvent(point, lowestTangent, mid); //  mid arc will disappear
-
-		}
-
-		void CheckTripleMid(BeachLineNode* leaf) // check triple where leaf is at the left of the triple
+		void CheckForCircleEvents(BeachLineNode* leaf)		 // check triplets where leaf is at the centre of the triplet
 		{
 			BeachLineNode* left = leaf->GetLeftLeaf();
-			BeachLineNode* mid;
+			BeachLineNode* mid = leaf;
 			BeachLineNode* right = leaf->GetRightLeaf();
 
-			if (!right || !mid) return; // no three consecutive arcs, so no chance of a circle.
+			if (!right || !mid || !left) return; // no three consecutive arcs, so no chance of a circle.
 			if ((right->site->x == left->site->x) && (right->site->y == left->site->y)) return; // no intersection in this case. this is case m1=m2
 
-			Point * point = BisectorIntersection(left->site, mid->site, right->site);
+			Point * point = BisectorsIntersection(left->site, mid->site, right->site);
 
 			if (point == 0) return;
 			//Calculate radius
+			
+			Point* p = new Point(57.5, 68.75);
 
-			double radius = distance(point, leaf->site);
+			double radius = distance(p, leaf->site);
+			double radius2 = distance(p, left->site);
+			double radius3 = distance(p, right->site);
 
-			if (SweepLine_y <= (point->y - radius))  return;// the tangent is not below the sweep line
+			double reach = (point->y - radius);
+
+			if (SweepLine_y <= reach)  return;// the tangent is not below the sweep line
 															// delete point?
 															//!!! we need to check for a degenerate case in here: new site = lowest tangent point.
-
+			//if ( checkPoint(point) ) return;
 			Point* lowestTangent = new Point(point->x, point->y - radius);
 
 			insertCircleEvent(point, lowestTangent, mid);
 
 		}
+		bool checkPoint(Point* point)
+		{
+			bool isCalculatedBefore = false;
+			for (Vertices::iterator i = topology.vertexRecords->begin(); i != topology.vertexRecords->end(); ++i) {
+				if ((*i)->vertex->x == point->x && (*i)->vertex->y == point->y) isCalculatedBefore = true;
+				if((*i)->vertex == point ) isCalculatedBefore = true;
+			}
+			return isCalculatedBefore;
+		}
 
-		void insertCircleEvent(Point* centreCircle, Point* lowestTangent, BeachLineNode* Arc)// insert circle event in Queue, making sure
+		void insertCircleEvent(Point* centreCircle, Point* lowestTangent, BeachLineNode* disappearingArc)// insert circle event in Queue, making sure
 		{																					// disappearing arc points to the circle event.
-			Event* event = new Event(lowestTangent, centreCircle, Arc);
-			Arc->circleEvent = event;
+			Event* event = new Event(lowestTangent, centreCircle, disappearingArc);
+			disappearingArc->circleEvent = event;
+			event->Arc = disappearingArc;
 			Queue.push(event);
 		}
 
 		double distance(Point* p1, Point* p2)
 		{
 			double dx = p1->x - p2->x;
-			double dy = p2->y - p2->y;
+			double dy = p1->y - p2->y;
 
-			return sqrt(dx*dx + dy*dy);
+			return std::sqrt(dx*dx + dy*dy);
 		}
 
-		Point* BisectorIntersection(Point* a, Point* b, Point* c)
+		Point* BisectorsIntersection(Point* a, Point* b, Point* c)
 		{
 			double dx1 = b->x - a->x;
 			double dy1 = b->y - a->y;
@@ -488,8 +465,8 @@ namespace octet {
 
 			if (dx1 != 0 && dx2 != 0) {
 
-				m1 = dy1 / dx1;
-				m2 = dy2 / dx2;
+				m1 = -dy1 / dx1;
+				m2 = -dy2 / dx2;
 
 				p1 = mid1.y - m1*mid1.x; // p1 belongs to r1 (bisector between a and b)
 				p2 = mid2.y - m2*mid2.x; // p2 belongs to r2 (bisector line between b and c)
@@ -501,64 +478,64 @@ namespace octet {
 			}
 
 			if (dx1 == 0 && dx2 == 0) return 0; //two vertical parallel lines: no intersections.
+			if (dy1 == 0 && dy1 == 0) return 0; //two horizontal lines: no intersections.
 
 			if (dx1 == 0) {
 				intersectionPoint->x = mid1.x;
-				m2 = dy2 / dx2;
+				m2 = -dy2 / dx2;
 				p2 = mid2.y - m2*mid2.x;
 				intersectionPoint->y = m2*(intersectionPoint->x) + p2;
 			}
 
 			if (dx2 == 0) {
 				intersectionPoint->x = mid2.x;
-				m1 = dy1 / dx1;
+				m1 = -dy1 / dx1;
 				p1 = mid1.y - m1*mid1.x;
 				intersectionPoint->y = m1*(intersectionPoint->x) + p1;
 			}
 
 		}
 
-		BeachLineNode* insertSubTree(BeachLineNode* arc1, Site* newSite)//Arc is a leaf node.
+		BeachLineNode* insertSubTree(BeachLineNode* arc, Site* newSite)//Arc is a leaf node.
 		{													  //                     <2,1>
 															  //					/    \
-															  //				<1,2>    arc1
+															  //				<1,2>    a2
 															  //               /    \
-															  //x-view:     arc12   arc2
-			BeachLineNode* breakpoint21 = new BeachLineNode;
-			BeachLineNode* breakpoint12 = new BeachLineNode;
-			BeachLineNode* newArc2 = new BeachLineNode(newSite);
-			BeachLineNode* newArc12 = new BeachLineNode(newSite);
+															  //x-view:       a0    a1
+			BeachLineNode* a0 = new BeachLineNode(arc->site);
+			BeachLineNode* a1 = new BeachLineNode(newSite);
+			BeachLineNode* a2 = new BeachLineNode(arc->site);
+			BeachLineNode* breakpoint12 = new BeachLineNode();
 
-			breakpoint21->parent = arc1->parent;
-			arc1->parent = breakpoint21;
-			breakpoint21->breakpoint.rightSite = arc1->site;
-			breakpoint21->breakpoint.leftSite = newSite;
-			breakpoint21->right = arc1;
-			breakpoint21->left = breakpoint12;
+			arc->SetRight(a2);
+			arc->SetLeft(breakpoint12);
 
-			breakpoint12->parent = breakpoint21;
-			breakpoint12->breakpoint.leftSite = arc1->site;
+			arc->Left()->SetLeft(a0);
+			arc->Left()->SetRight(a1);
+
+			arc->isLeaf = false;
+			arc->breakpoint.leftSite = newSite;
+			arc->breakpoint.rightSite = arc->site;
+
+			breakpoint12->breakpoint.leftSite = a0->site;
 			breakpoint12->breakpoint.rightSite = newSite;
-			breakpoint12->left = newArc12; newArc12->parent = breakpoint12;
-			breakpoint12->right = newArc2; newArc2->parent = breakpoint12;
 
-			newArc12->site = arc1->site;
-			newArc2->site = newSite;
-
-
+			
 			// Update DCEL, with new halfedges.//!!! put it in a new function (updateTopology-like)
 
 			//Creating the information:
-			updateTopology(newSite, arc1->site);
+			updateTopology(newSite, arc->site);
 
 
 
-			return newArc2; // so we can check for circle events right and left of this new arc we just added to the beachline.
-
+			return a1; // so we can check for circle events right and left of this new arc we just added to the beachline.
+						// a1 is the new arc created
 		}
 
 		void updateTopology(Site* s2, Site* s1)
 		{
+			bool face1isNew = true;
+			bool face2isNew = true;
 			HalfEdge* halfedge21 = new HalfEdge(s2, s1);
 			Face* face2 = new Face(s2, halfedge21);
 
@@ -572,11 +549,18 @@ namespace octet {
 			halfedge12->face = face1;
 
 			//Inserting info into our records (DCEL)
+			//halfedge records: both edges e12, e21
 			topology.halfEdgeRecords->push_back(halfedge12);
 			topology.halfEdgeRecords->push_back(halfedge21);
 
-			topology.faceRecords->push_back(face1);
-			topology.faceRecords->push_back(face2);
+			//Adding faces to our face records, only the new ones. if they are already there they won't be inserted.
+			for (Faces::iterator i = topology.faceRecords->begin(); i != topology.faceRecords->end(); ++i) {
+				if ((*i)->site == face1->site) face1isNew = false;
+				if ((*i)->site == face2->site) face2isNew = false;
+			}
+			if (face1isNew) topology.faceRecords->push_back(face1);
+			if (face2isNew)  topology.faceRecords->push_back(face2);
+
 		}
 
 		BeachLineNode* ArcVerticallyAbove(Point* p)
@@ -586,8 +570,12 @@ namespace octet {
 
 			while (leafNode->isLeaf == false) {
 				x = calculateXBreakPoint(leafNode, SweepLine_y);//Since it is not leaf, is an internal node. This calculates x-coordinates of the breakpoints of the beachline
-				if (x < p->x) leafNode = leafNode->right;
-				else leafNode = leafNode->left;
+				if (x < p->x) {
+					leafNode = leafNode->Right();
+				}
+				else {
+					leafNode = leafNode->Left();
+				}
 			}
 
 			return leafNode;
@@ -597,15 +585,15 @@ namespace octet {
 		{
 			//Calculates the intersection points between two parabolas defined by sites l and r. And decides which intersection
 			//belongs to the breakpoint.
-			Point* l = internalNode->breakpoint.leftSite;
+/*			Point* l = internalNode->breakpoint.leftSite;
 			Point* r = internalNode->breakpoint.rightSite;
 
 			double a = (r->y - ly) - (l->y - ly);
 			double b = -2 * (l->x)*(r->y - ly) + 2 * (r->x)*(l->y - ly);
-			double c = (r->y - ly)*((l->x)*(l->x) + (l->y)*(l->y) - (ly)*(ly)) - (l->y)*((r->x)*(r->x) + (r->y)*(r->y) - (ly)*(ly));
+			double c = ( (r->y - ly)*((l->x)*(l->x) + (l->y)*(l->y) - (ly)*(ly)) ) - ( (l->y)*((r->x)*(r->x) + (r->y)*(r->y) - (ly)*(ly)) );
 
-			double x1 = (-b - sqrt(b*b - 4 * a*c)) / (2 * a);
-			double x2 = (-b + sqrt(b*b - 4 * a*c)) / (2 * a);
+			double x1 = (-b - std::sqrt(b*b - 4 * a*c)) / (2 * a);
+			double x2 = (-b + std::sqrt(b*b - 4 * a*c)) / (2 * a);
 
 			if (l->x < r->x) {
 				return std::max(x1, x2);
@@ -613,7 +601,36 @@ namespace octet {
 			else {
 				return std::min(x1, x2);
 			}
+		*/ // doesnt seem to work !!!!!!!!!!!!!!!!!!!!!
+
+			// This works. courtesy of http://blog.ivank.net/fortunes-algorithm-and-implementation.html
+			Point* p = internalNode->breakpoint.leftSite;
+			Point* r = internalNode->breakpoint.rightSite;
+
+			double dp = 2.0 * (p->y - ly);
+			double a1 = 1.0 / dp;
+			double b1 = -2.0 * p->x / dp;
+			double c1 = ly + dp / 4 + p->x * p->x / dp;
+
+			dp = 2.0 * (r->y - ly);
+			double a2 = 1.0 / dp;
+			double b2 = -2.0 * r->x / dp;
+			double c2 = ly + dp / 4 + r->x * r->x / dp;
+
+			double a = a1 - a2;
+			double b = b1 - b2;
+			double c = c1 - c2;
+
+			double disc = b*b - 4 * a * c;
+			double x1 = (-b + std::sqrt(disc)) / (2 * a);
+			double x2 = (-b - std::sqrt(disc)) / (2 * a);
+
+			double ry;
+			if (p->y < r->y) return std::max(x1, x2);
+			else return std::min(x1, x2);
+
 		}
+
 
 	};
 }
