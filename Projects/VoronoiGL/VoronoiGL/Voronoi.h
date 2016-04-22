@@ -7,8 +7,7 @@
 #include "BeachLineNode.h"
 #include "Topology.h"
 #include "Event.h"
-#include "Cloud.h"
-//#include "FortunesVoronoi.h"
+#include "EdgeInfo.h"
 
 #include <list>
 #include <queue>
@@ -19,17 +18,18 @@
 #include <vector>
 
 class BeachLineNode;
+class EdgeInfo;
 
 #define FACTOR 100
 
 namespace vor
 {
 	/*
-	Useful data containers for Vertices (places) and Edges of Voronoi diagram
+	to be able to use naming with more intuition
 	*/
 
 	typedef std::list<Point *>		Vertics;
-	typedef std::list<Point *>		Edges;
+	typedef std::list<EdgeInfo *>	Edges;
 
 	typedef Point					Site;
 	typedef std::list<Point *>		Sites;
@@ -43,22 +43,24 @@ namespace vor
 	*/
 	class Voronoi {
 
-		typedef std::list<Point*> Edges;
 
-	public:
+	private:
 		Topology topology;  // The  DCEL.
 		BeachLineNode* root; // The Binary Search Tree.
 
 		std::priority_queue<Event*, std::vector<Event*>, Event::CompareEvent> Queue; //The priority queue.
 		std::set<Event*> falseAlarmEvents; //We can't delete events in Queue so we store the ones we want removed in falseAlarm,
-									 //and compare any circle event in Queue with falseAlarm, if it is in falseAlarm we won't process it.
+				//and compare any circle event in Queue with falseAlarm, if it is in falseAlarm we won't process it.
 
 		double SweepLine_y; // the y-component of the SweepLine.
 		Sites * sites;		// Where we store the points of the cloud.		
 		Diagram * diagram; //Where we will store the edges of the Voronoi Diagram. Reading as pairs of points each edge.
 
-		Edges * edges;
+		Edges * edges;//store info on the go about the edges to avoid incurring in floating point errors for the calculations.
+		Vertics points; //for debugging
 
+		double width, height; //for the bounding box
+	public:
 		//Constructor
 		Voronoi()
 		{
@@ -70,22 +72,25 @@ namespace vor
 		}
 
 
-		Diagram* VoronoiDiagram(Sites * cloudPoints)
+		Edges* VoronoiDiagram(Sites * cloudPoints, double w, double h)
 		{
 			//Initialization	
 			sites = cloudPoints;
 			root = 0;
+			width = w;
+			height= h;
 
 			if (!diagram) {
 				diagram = new Diagram();
 				topology.vertexRecords = new Vertices();
 				topology.faceRecords = new Faces();
 				topology.halfEdgeRecords = new HalfEdges;
+				edges = new Edges();
 			}
 			else {
 				//Resetting/Initalizing diagram data structure
 				for (Diagram::iterator i = diagram->begin(); i != diagram->end(); ++i) delete (*i);
-				diagram->clear();
+			    diagram->clear();
 				//Resetting/Initializing DCEL
 				for (Vertices::iterator i = topology.vertexRecords->begin(); i != topology.vertexRecords->end(); ++i) delete (*i);
 				topology.vertexRecords->clear();
@@ -93,6 +98,12 @@ namespace vor
 				topology.faceRecords->clear();
 				for (HalfEdges::iterator i = topology.halfEdgeRecords->begin(); i != topology.halfEdgeRecords->end(); ++i) delete (*i);
 				topology.halfEdgeRecords->clear();
+				//Extro edge info for floating point errors avoidance
+				for (Edges::iterator i = edges->begin(); i != edges->end(); ++i) delete (*i);
+				edges->clear();
+
+				for (Vertics::iterator i = points.begin(); i != points.end(); ++i) delete (*i);
+				points.clear();
 			}
 
 			//Initializing Priority Queue
@@ -105,18 +116,22 @@ namespace vor
 
 			//Main loop of the Algorithm:
 			Event *currentEvent;
-			while (!Queue.empty()) {
+		while (!Queue.empty()) {
 				currentEvent = Queue.top(); // event with highest y-component.
 				Queue.pop(); //removing the event from the queue
 				SweepLine_y = currentEvent->point->y; //sweepline where the current event to be processed is
 
-				if (currentEvent->isCircleEvent == true) {
+					if (falseAlarmEvents.find(currentEvent) != falseAlarmEvents.end()) {// means this circle event is among the false alarm ones.
+						delete( currentEvent );
+						falseAlarmEvents.erase(currentEvent);
+						currentEvent = 0;
+						continue;
+					}
 					//we check is not a false alarm
 					//and use 'continue' to skip the event and get back to beginning of loop
-				}
 
 				if (currentEvent->isCircleEvent == true) {
-					HandleCircleEvent(currentEvent->Arc);
+					HandleCircleEvent(currentEvent);
 				}
 				else {
 					HandleSiteEvent(currentEvent->point);
@@ -127,40 +142,70 @@ namespace vor
 
 			 //Bounding box, (for the infinite edges)
 			 //1. complete vertex info for each halfedge record  2. fill
-			ApplyBoundingBox();
+		//ApplyBoundingBox();
 
-			prepareEdges();
-			return diagram;
+		//	prepareEdges();
+		//	return diagram;
+
+
+
+			//from http://blog.ivank.net/fortunes-algorithm-and-implementation.html
+			//It works faster, but we can't do Delaunay afterwards as there is no DCEL.
+			FinishEdge(root);
+
+			for (Edges::iterator i = edges->begin(); i != edges->end(); ++i)
+			{
+				if ((*i)->neighbour)
+				{
+					(*i)->start = (*i)->neighbour->end;
+					delete (*i)->neighbour;
+				}
+			}
+
+			return edges;
 
 		}//VoronoiDiagram()
 
 		void prepareEdges()
 		{
 			for (HalfEdges::iterator i = topology.halfEdgeRecords->begin(); i != topology.halfEdgeRecords->end(); ++i) {
-				edges->push_back( (*i)->origin ); 
-				edges->push_back( (*i)->destination );
-				//i++;
+				Point* origin = new Point((*i)->origin->x, (*i)->origin->y);
+				Point* destination = new Point((*i)->destination->x, (*i)->destination->y);
+				diagram->push_back( origin ); 
+				diagram->push_back( destination );
 			}
 
-			for (Sites::iterator i = sites->begin(); i != sites->end(); ++i)
-				diagram->push_back((*i));
+		/*	for (Sites::iterator i = sites->begin(); i != sites->end(); ++i)
+				diagram->push_back((*i));*/
 		}
 
 		void ApplyBoundingBox()
 		{
 			for (HalfEdges::iterator i = topology.halfEdgeRecords->begin(); i != topology.halfEdgeRecords->end(); ++i) {
-				if ((*i)->destination == 0 || (*i)->origin == 0) {
-					if ((*i)->destination == 0) {
-						(*i)->destination = calculateBBoxIntersection((*i)->origin, (*i)->orientation);
-						(*i)->twin->origin = (*i)->destination;
+					if ((*i)->destination == 0 || (*i)->origin == 0) {
+						if ((*i)->destination == 0) {
+							(*i)->destination = calculateBBoxIntersection((*i)->origin, (*i)->orientation);
+							(*i)->twin->origin = (*i)->destination;
+						}
+						else {
+							(*i)->origin = calculateBBoxIntersection((*i)->destination, (*i)->orientation);
+							(*i)->twin->destination = (*i)->origin;
+						}
 					}
-					else {
-						(*i)->origin = calculateBBoxIntersection((*i)->destination, (*i)->orientation);
-						(*i)->twin->destination = (*i)->origin;
-					}
+
+			/*	if ((*i)->destination == 0) {
+					(*i)->destination = calculateBBoxIntersection((*i)->origin, (*i)->orientation);
+					(*i)->twin->origin = (*i)->destination;
 				}
+				if ((*i)->origin == 0) {
+					(*i)->origin = calculateBBoxIntersection((*i)->destination, (*i)->orientation);
+					(*i)->twin->destination = (*i)->origin;
+				}*/
 			}
+
 		}
+
+		
 
 		Point* calculateBBoxIntersection(Point* v, Orientation orientation)
 		{
@@ -170,7 +215,11 @@ namespace vor
 
 			//1. Determining quadrant:
 			Point m((s1->x + s2->x) / 2, (s1->y + s2->y) / 2);
-			Point u(m.x - v->x, m.y - v->y);
+			Point s( s2->x-s1->x,s2->y-s1->y ); // s2-s1
+			Point u( -s.y, s.x); // perpendicular left-wise
+			
+			//	Point u(m.x - v->x, m.y - v->y);
+		
 
 			if (u.x > 0 && u.y > 0) {
 				if (u.x == 0 || u.y == 0) {
@@ -251,14 +300,9 @@ namespace vor
 			return V;
 		}
 
-		void HandleCircleEvent(BeachLineNode* leaf)
+		void HandleCircleEvent(Event* e)
 		{
-			if (falseAlarmEvents.find(leaf->circleEvent) != falseAlarmEvents.end()) {// means this circle event is among the false alarm ones.
-				delete(leaf->circleEvent);
-				falseAlarmEvents.erase(leaf->circleEvent);
-				leaf->circleEvent = 0;
-				return;
-			}
+			BeachLineNode* leaf = e->Arc;
 
 			BeachLineNode* leftBreakPoint = leaf->GetLeftParent(leaf);
 			BeachLineNode* rightBreakPoint = leaf->GetRightParent(leaf);
@@ -266,10 +310,25 @@ namespace vor
 			BeachLineNode* leftLeaf = leftBreakPoint->GetLeftChild(leftBreakPoint);
 			BeachLineNode* rightLeaf = rightBreakPoint->GetRightChild(rightBreakPoint);
 
-			BeachLineNode* highestBreakPoint=0;
+			//side arcs may have cirlce events of the future, now they are false alarms. need to record it.
+			if (leftLeaf->circleEvent) { 
+				//falseAlarmEvents.insert(leftLeaf->circleEvent); leftLeaf->circleEvent = 0;
+			} // is this mean that all triplets that trigger a circleEvent have a pointer 
+			if (rightLeaf->circleEvent) { 
+				//falseAlarmEvents.insert(rightLeaf->circleEvent); rightLeaf->circleEvent = 0;
+ } // is this mean that all triplets that trigger a circleEvent have a pointer 
+
+			
+
+			//Point* vertexPoint = leaf->circleEvent->circleCentre; // a voronoi vertex
+			Point* vertexPoint = new Point(e->point->x, GetY(leaf->site, e->point->x));
+			points.push_back(vertexPoint);//3
+
+			BeachLineNode* highestBreakPoint = 0;
 			BeachLineNode* node = leaf;
 
-			Point* vertexPoint = leaf->circleEvent->circleCentre; // a voronoi vertex
+			leftBreakPoint->edge->end = vertexPoint;
+			rightBreakPoint->edge->end = vertexPoint;
 
 			//locate first our highest breakpoint which we will reuse for our new breakpoint.
 			while (node != root) // the top node could be our breakpoint. y not (node->parent != 0)?
@@ -278,6 +337,9 @@ namespace vor
 				if (node == leftBreakPoint) highestBreakPoint = leftBreakPoint;
 				if (node == rightBreakPoint) highestBreakPoint = rightBreakPoint;
 			}
+			//for the calulations on the go. More precise, no floating point errors.
+			highestBreakPoint->edge = new EdgeInfo(vertexPoint, leftLeaf->site, rightLeaf->site);
+			edges->push_back(highestBreakPoint->edge);
 
 			// use highest breakpoint for our new breakpoint when the arc disappears.
 			highestBreakPoint->breakpoint.leftSite = leftLeaf->site;
@@ -367,11 +429,30 @@ namespace vor
 		void HandleSiteEvent(Site* p)
 		{
 			if (!root) {
-				root = new BeachLineNode(p); // a new parabola
+				root = new BeachLineNode(p); // a new parabolic arc
 				return;
 			}
 
 			//Consider the list of degenerate events
+			//Strange case, degenerate event where root's site and new site have same y-coordinate
+		if (root->isLeaf && root->site->y - p->y < 1) //degenerate event //Both the lower space at the same height
+			{
+				Point * fp = root->site;
+				root->isLeaf = false;
+				root->SetLeft(new BeachLineNode(fp));
+				root->SetRight(new BeachLineNode(p));
+				Point * s = new Point((p->x + fp->x) / 2, height); //The start edges of the middle sites
+																	 //height of the bbox, so we got the first point of a voronoi edge, right on the upper side of the bbox.
+				points.push_back(s);//1
+				
+				if (p->x > fp->x) root->edge = new EdgeInfo(s, fp, p);//Decide which left to right
+				else root->edge = new EdgeInfo(s, p, fp);
+				edges->push_back(root->edge);
+
+				return;
+			}
+			
+
 			BeachLineNode* arcAbove = ArcVerticallyAbove(p);
 
 			if (arcAbove->circleEvent) { //if it is a futre circle event we must mark it as false alarm.
@@ -389,26 +470,26 @@ namespace vor
 
 		}//HandleSiteEvent
 
-		void CheckForCircleEvents(BeachLineNode* leaf)		 // check triplets where leaf is at the centre of the triplet
+		void CheckForCircleEvents(BeachLineNode* mid)		 // check triplets where leaf is at the centre of the triplet
 		{
-			BeachLineNode* left = leaf->GetLeftLeaf();
-			BeachLineNode* mid = leaf;
-			BeachLineNode* right = leaf->GetRightLeaf();
+			BeachLineNode* leftBP = mid->GetLeftParent(mid); //left breakpoint of mid
+			BeachLineNode* rightBP = mid->GetRightParent(mid);//right breakpoint of mid
+
+			BeachLineNode* left = mid->GetLeftChild(leftBP); //left leaf of mid
+			BeachLineNode* right = mid->GetRightChild(rightBP); //left leaf of mid
+
 
 			if (!right || !mid || !left) return; // no three consecutive arcs, so no chance of a circle.
 			if ((right->site->x == left->site->x) && (right->site->y == left->site->y)) return; // no intersection in this case. this is case m1=m2
 
-			Point * point = BisectorsIntersection(left->site, mid->site, right->site);
+			Point * point = BisectorsIntersection(leftBP->edge, rightBP->edge);
 
 			if (point == 0) return;
 			//Calculate radius
 			
-			Point* p = new Point(57.5, 68.75);
 
-			double radius = distance(p, leaf->site);
-			double radius2 = distance(p, left->site);
-			double radius3 = distance(p, right->site);
-
+			double radius = distance(point, left->site);
+			
 			double reach = (point->y - radius);
 
 			if (SweepLine_y <= reach)  return;// the tangent is not below the sweep line
@@ -416,12 +497,21 @@ namespace vor
 															//!!! we need to check for a degenerate case in here: new site = lowest tangent point.
 			//if ( checkPoint(point) ) return;
 			Point* lowestTangent = new Point(point->x, point->y - radius);
+			
 
-			insertCircleEvent(point, lowestTangent, mid);
+
+			//insertCircleEvent(point, lowestTangent, mid);
+			Event* event = new Event(lowestTangent, true); // , point, mid);
+			points.push_back(event->point);//5
+
+			mid->circleEvent = event;
+			event->Arc = mid;
+			Queue.push(event);
 
 		}
+
 		bool checkPoint(Point* point)
-		{
+		{ // for debugging purposes
 			bool isCalculatedBefore = false;
 			for (Vertices::iterator i = topology.vertexRecords->begin(); i != topology.vertexRecords->end(); ++i) {
 				if ((*i)->vertex->x == point->x && (*i)->vertex->y == point->y) isCalculatedBefore = true;
@@ -430,12 +520,15 @@ namespace vor
 			return isCalculatedBefore;
 		}
 
+		//too little code to deserve another function. 
 		void insertCircleEvent(Point* centreCircle, Point* lowestTangent, BeachLineNode* disappearingArc)// insert circle event in Queue, making sure
 		{																					// disappearing arc points to the circle event.
-			Event* event = new Event(lowestTangent, centreCircle, disappearingArc);
-			disappearingArc->circleEvent = event;
-			event->Arc = disappearingArc;
-			Queue.push(event);
+			Event* event = new Event(lowestTangent, true); //, centreCircle, disappearingArc);
+			//points.push_back(lowestTangent);//5
+
+			//disappearingArc->circleEvent = event;
+			//event->Arc = disappearingArc;
+		//	Queue.push(event);
 		}
 
 		double distance(Point* p1, Point* p2)
@@ -446,8 +539,23 @@ namespace vor
 			return std::sqrt(dx*dx + dy*dy);
 		}
 
-		Point* BisectorsIntersection(Point* a, Point* b, Point* c)
-		{
+		Point* BisectorsIntersection(EdgeInfo* l, EdgeInfo* r)
+		{ //from http://blog.ivank.net/fortunes-algorithm-and-implementation.html
+			
+			double x = (r->g - l->g) / (l->f - r->f);
+			double y = l->f * x + l->g;
+
+			if ((x - l->start->x) / l->direction->x < 0) return 0;
+			if ((y - l->start->y) / l->direction->y < 0) return 0;
+
+			if ((x - r->start->x) / r->direction->x < 0) return 0;
+			if ((y - r->start->y) / r->direction->y < 0) return 0;
+
+			Point * p = new Point(x, y);
+			points.push_back(p);//6
+			return p;
+
+			/* Excessive floating point errors this way!!!!
 			double dx1 = b->x - a->x;
 			double dy1 = b->y - a->y;
 			double dx2 = c->x - b->x;
@@ -493,7 +601,7 @@ namespace vor
 				p1 = mid1.y - m1*mid1.x;
 				intersectionPoint->y = m1*(intersectionPoint->x) + p1;
 			}
-
+			*/
 		}
 
 		BeachLineNode* insertSubTree(BeachLineNode* arc, Site* newSite)//Arc is a leaf node.
@@ -502,6 +610,22 @@ namespace vor
 															  //				<1,2>    a2
 															  //               /    \
 															  //x-view:       a0    a1
+			Point * start = new Point(newSite->x, GetY(arc->site, newSite->x));//Gets intersection point between parabola above and vertical ray(degenerated parabola) with x as coordinates
+			points.push_back(start);//2
+
+			EdgeInfo * el = new EdgeInfo(start, arc->site, newSite);
+			EdgeInfo * er = new EdgeInfo(start, newSite, arc->site);
+
+			el->neighbour = er;
+			edges->push_back(el);
+
+			//Insert edge in the internal node(not sure is the best way)
+			arc->edge = er;
+			arc->isLeaf = false;
+
+
+
+
 			BeachLineNode* a0 = new BeachLineNode(arc->site);
 			BeachLineNode* a1 = new BeachLineNode(newSite);
 			BeachLineNode* a2 = new BeachLineNode(arc->site);
@@ -509,11 +633,11 @@ namespace vor
 
 			arc->SetRight(a2);
 			arc->SetLeft(breakpoint12);
+			arc->Left()->edge = el;
 
 			arc->Left()->SetLeft(a0);
 			arc->Left()->SetRight(a1);
 
-			arc->isLeaf = false;
 			arc->breakpoint.leftSite = newSite;
 			arc->breakpoint.rightSite = arc->site;
 
@@ -530,6 +654,16 @@ namespace vor
 
 			return a1; // so we can check for circle events right and left of this new arc we just added to the beachline.
 						// a1 is the new arc created
+		}
+
+		double	GetY(Point * p, double x) // given a site above a new site with x component, gives intersection with the parabola above, y-componet.
+		{
+			double dp = 2 * (p->y - SweepLine_y);
+			double a1 = 1 / dp;
+			double b1 = -2 * p->x / dp;
+			double c1 = SweepLine_y + dp / 4 + p->x * p->x / dp;
+
+			return(a1*x*x + b1*x + c1);
 		}
 
 		void updateTopology(Site* s2, Site* s1)
@@ -629,6 +763,25 @@ namespace vor
 			if (p->y < r->y) return std::max(x1, x2);
 			else return std::min(x1, x2);
 
+		}
+
+		void	FinishEdge(BeachLineNode * n)
+		{//Collection info to finish up infinite edges. 
+			//from http://blog.ivank.net/fortunes-algorithm-and-implementation.html
+			if (n->isLeaf) { delete n; return; }
+			double mx;
+
+			//This looks baad very bad: but it works!
+			if (n->edge->direction->x > 0.0)	mx = std::max(width, n->edge->start->x + 10); //These numbers have to be generalized to constants.
+			else							mx = std::min(0.0, n->edge->start->x - 10);
+
+			Point * end = new Point(mx, mx * n->edge->f + n->edge->g);
+			n->edge->end = end;
+			points.push_back(end);//4
+
+			FinishEdge(n->Left());
+			FinishEdge(n->Right());
+			delete n;
 		}
 
 

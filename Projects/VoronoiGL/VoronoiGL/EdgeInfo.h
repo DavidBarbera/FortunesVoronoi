@@ -8,6 +8,7 @@
 
 class EdgeInfo {
 
+public:
 	Point *	start;
 	Point *	end;
 	Point *	direction;
@@ -19,6 +20,7 @@ class EdgeInfo {
 
 	EdgeInfo * neighbour;
 
+	//constuctor
 	EdgeInfo( Point * s,  Point * l,  Point * r)
 	{
 		start = s;
@@ -33,6 +35,7 @@ class EdgeInfo {
 
 	}
 
+	//destructor
 	~EdgeInfo()
 	{
 		delete direction;

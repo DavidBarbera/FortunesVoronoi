@@ -151,7 +151,6 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="BeachLineNode.h" />
-    <ClInclude Include="Cloud.h" />
     <ClInclude Include="Event.h" />
     <ClInclude Include="Face.h" />
     <ClInclude Include="HalfEdge.h" />

@@ -1,3 +1,6 @@
+// Based on http://blog.ivank.net/fortunes-algorithm-and-implementation.html in order to test the algorithm
+//
+
 #include <GL/glew.h> // Include the GLEW header file
 #include <GL/glut.h> // Include the GLUT header file
 #include <iostream>
@@ -14,9 +17,10 @@ void onEF(int n);
 void reshape(int width, int height);
 
 vor::Voronoi * v;
-vor::Vertics * ver; // vrcholy //tops, the points or sites
-vor::Vertics * dir; // smìry, kterými se pohybují // a settlement which moves, directions to make the points move
-vor::Diagram * edg;	 // edge diagram
+vor::Vertics * ver;  //tops, the points or sites
+vor::Vertics * dir;  // a settlement which moves, directions to make the points move
+vor::Edges * edg;	 // edge diagram
+vor::Diagram * graph;
 
 double w = 100;
 
@@ -42,10 +46,12 @@ int main(int argc, char **argv)
 	}
 
 	ver->push_back(new Point(w*(double)0.5, w*(double)0.9));
-/*
+
 	ver->push_back(new Point(w*(double)0.2, w*(double)0.8));
-	ver->push_back(new Point(w*(double)0.35, w*(double)0.75));
-	ver->push_back(new Point(w*(double)0.9, w*(double)0.91));
+   /// ver->push_back(new Point(w*(double)0.2, w*(double)0.85));
+
+//	ver->push_back(new Point(w*(double)0.35, w*(double)0.75));
+/*	ver->push_back(new Point(w*(double)0.9, w*(double)0.91));
 	ver->push_back(new Point(w*(double)0.15, w*(double)0.65));
 	ver->push_back(new Point(w*(double)0.12, w*(double)0.35));
 	ver->push_back(new Point(w*(double)0.85, w*(double)0.25));
@@ -60,41 +66,21 @@ int main(int argc, char **argv)
 	ver->push_back(new Point(w*(double)0.3, w*(double)0.2));
 
 
-	for (int i = 0; i < 5; i++) dir->push_back(new Point(0, 0));
+	for (int i = 0; i < ver->size(); i++) dir->push_back(new Point(0, 0));
 
-	//insert those random points (or sites) into Voronoi v, with bounding box 
-	//	edg = v->GetEdges(ver, w, w);
-	std::cout << "Voronoi is done!\n";
 
-	/*	for(vor::Edges::iterator i = edg->begin(); i!= edg->end(); ++i)
-	{
-	if( (*i)->start == 0 )
-	{
-	std::cout << "chybi zacatek hrany! = missing first edge\n";
-	continue;
-	}
-	if( (*i)->end == 0 )
-	{
-	std::cout << "chybi konec hrany! = missing last edge\n";
-	continue;
-	}
-	}*/
-
-	glutInit(&argc, argv); // Initialize GLUT
-	glutInitDisplayMode(GLUT_SINGLE); // Set up a basic display buffer (only single buffered for now)
-	glutInitWindowSize(300, 300); // Set the width and height of the window
-	glutInitWindowPosition(100, 100); // Set the position of the window
-	glutCreateWindow("Fortune's Voronoi Algorithm in 2D"); // Set the title for the window
+	glutInit(&argc, argv); 
+	glutInitDisplayMode(GLUT_SINGLE); 
+	glutInitWindowSize(600, 600); 
+	glutInitWindowPosition(100, 100); 
+	glutCreateWindow("Fortune's Voronoi Algorithm in 2D"); 
 
 	glutTimerFunc(100, onEF, 0);
-	glutDisplayFunc(display); // Tell GLUT to use the method "display" for rendering
+	glutDisplayFunc(display); 
 
-	glutReshapeFunc(reshape); // Tell GLUT to use the method "reshape" for reshaping
+	glutReshapeFunc(reshape); 
 
-							  //glutKeyboardFunc(keyPressed); // Tell GLUT to use the method "keyPressed" for key presses
-							  //glutKeyboardUpFunc(keyUp); // Tell GLUT to use the method "keyUp" for key up events
-
-	glutMainLoop(); // Enter GLUT's main loop
+	glutMainLoop(); 
 
 	return 0;
 }
@@ -102,7 +88,10 @@ int main(int argc, char **argv)
 void drawVoronoi()
 {
 	glColor3f(0, 0, 0);
-
+// this is just to add velocities to our points and simulate hiting the borders of the screen
+// At the moment velocity is zero, until algorithm works properly.
+// from http://blog.ivank.net/fortunes-algorithm-and-implementation.html
+// can be improved to simulated forces and tensions.
 	vor::Vertics::iterator j = dir->begin();
 	for (vor::Vertics::iterator i = ver->begin(); i != ver->end(); ++i)
 	{
@@ -117,9 +106,8 @@ void drawVoronoi()
 	}
 
 
-	//edg = v->GetEdges(ver, w, w);
 	
-	//std::cout << "voronoi done";
+	// Rendering of points as little quads:
 	for (vor::Vertics::iterator i = ver->begin(); i != ver->end(); ++i)
 	{
 		glBegin(GL_QUADS);
@@ -131,21 +119,35 @@ void drawVoronoi()
 		glEnd();
 	}
 
-	edg = v->VoronoiDiagram(ver);
+//This part is based on http://blog.ivank.net/fortunes-algorithm-and-implementation.html
+// computes fast, but doesn't allow to store info about the diagram.
+	 edg = v->VoronoiDiagram(ver, w, w);
 	glBegin(GL_LINES);
-	for (vor::Diagram::iterator i = edg->begin(); i != edg->end(); ++i)
+	for (vor::Edges::iterator i = edg->begin(); i != edg->end(); ++i)
 	{
-		glVertex2f(-1 + 2 * (*i)->x / w, -1 + 2 * (*i)->y / w);
+		glVertex2f(-1 + 2 * (*i)->start->x / w, -1 + 2 * (*i)->start->y / w);
+		glVertex2f(-1 + 2 * (*i)->end->x / w, -1 + 2 * (*i)->end->y / w);
 	}
 	glEnd();
-	
+
+// This part uses DCEL, would be easier to construct Delaunay Triangulation and deal with the colouring of regions once algorithm works.
+/*	graph = v->VoronoiDiagram(ver, w, w);
+	glBegin(GL_LINES);
+	for (vor::Diagram::iterator i = graph->begin(); i != graph->end(); ++i)
+	{
+		glVertex2f(-1 + 2 * (*i)->x / w, -1 + 2 * (*i)->y / w);
+		//glVertex2f(-1 + 2 * (*i)->x / w, -1 + 2 * (*i)->y / w);
+	}
+	glEnd();
+*/
+
+
 }
 
 
 void display(void)
 {
-	std::cout << "display\n";
-	glLoadIdentity(); // Load the Identity Matrix to reset our drawing locations  
+	glLoadIdentity();  
 	glTranslatef(0.0f, 0.0f, -5.0f);
 
 	glFlush();
@@ -156,20 +158,21 @@ void onEF(int n)
 {
 
 	glutTimerFunc(20, onEF, 0);
-	glClear(GL_COLOR_BUFFER_BIT);//Clear the screen
-	glClearColor(1.0f, 1.0f, 1.0f, 1.0f); // Clear the background of our window to red  
+	glClear(GL_COLOR_BUFFER_BIT);
+	glClearColor(1.0f, 1.0f, 1.0f, 1.0f); 
 
 	drawVoronoi();
+
 	glutSwapBuffers();
-	//Draw everything to the screen
+	
 }
 
 void reshape(int width, int height)
 {
 
-	glViewport(0, 0, (GLsizei)width, (GLsizei)height); // Set our viewport to the size of our window
-	glMatrixMode(GL_PROJECTION); // Switch to the projection matrix so that we can manipulate how our scene is viewed
-	glLoadIdentity(); // Reset the projection matrix to the identity matrix so that we don't get any artifacts (cleaning up)
-	gluPerspective(22.5, (GLfloat)width / (GLfloat)height, 1.0, 100.0); // Set the Field of view angle (in degrees), the aspect ratio of our window, and the new and far planes
-	glMatrixMode(GL_MODELVIEW); // Switch back to the model view matrix, so that we can start drawing shapes correctly
+	glViewport(0, 0, (GLsizei)width, (GLsizei)height); 
+	glMatrixMode(GL_PROJECTION); 
+	glLoadIdentity(); 
+	gluPerspective(22.5, (GLfloat)width / (GLfloat)height, 1.0, 100.0); 
+	glMatrixMode(GL_MODELVIEW);
 }
